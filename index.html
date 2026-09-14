@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<link rel="manifest" href="./manifest.json">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>DMoney</title>
@@ -377,7 +378,6 @@
 .notification-list{display:grid;gap:8px}.notification-item{width:100%;display:flex;align-items:flex-start;gap:10px;padding:12px;border:1px solid var(--card-border);border-radius:13px;background:var(--card);color:var(--text);text-align:left;cursor:pointer;position:relative}.notification-item.unread{border-color:rgba(217,164,65,.55);background:var(--card-hover)}.notification-item.read{opacity:.72}.notification-icon{width:34px;height:34px;display:flex;align-items:center;justify-content:center;border-radius:10px;background:var(--input-bg);font-size:17px;flex:0 0 34px}.notification-body{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}.notification-body b{font-size:13px}.notification-body span{font-size:12px;line-height:1.45;color:var(--muted)}.notification-body small{font-size:10px;color:var(--faint)}.notification-dot{width:8px;height:8px;border-radius:50%;background:var(--rose);flex:0 0 8px;margin-top:5px}.notification-panel{position:fixed;inset:0;z-index:96;background:var(--bg3);overflow:auto;padding:14px 16px calc(40px + env(safe-area-inset-bottom));margin:0}
 .menu-item .notification-badge{margin-left:7px;margin-right:2px;box-shadow:none}.notification-menu-meta{font-size:10px;color:var(--muted);white-space:nowrap;margin-left:auto}
 </style>
-  <link rel="manifest" href="./manifest.json">
 </head>
 <body>
 <div id="app"></div>
@@ -2334,6 +2334,86 @@
     }
   };
 
+  /* Lightweight Android/Chrome back navigation. Does not alter rendering or normal app actions. */
+  (function(){
+    var active = null, suppress = false;
+    function mark(kind, replace){
+      if(suppress) return;
+      active = kind;
+      var st = {dmoneyUI:kind};
+      if(history.state && history.state.dmoneyUI) history.replaceState(st,'',location.href); else history.pushState(st,'',location.href);
+    }
+    function clear(kind){
+      if(active===kind){ active=null; if(history.state && history.state.dmoneyUI) history.replaceState(null,'',location.href); }
+    }
+    function wrapOpen(name,kind,push){
+      var fn=WBT[name]; if(typeof fn!=='function') return;
+      WBT[name]=function(){
+        var args=arguments, result=fn.apply(WBT,args);
+        if(name==='toggleMenu' || name==='toggleSearch' || name==='toggleTxForm') { if(args[0]===true) mark(kind,false); }
+        else mark(kind, push!==false);
+        return result;
+      };
+    }
+    function wrapClose(name,kind){
+      var fn=WBT[name]; if(typeof fn!=='function') return;
+      WBT[name]=function(){ var r=fn.apply(WBT,arguments); clear(kind); return r; };
+    }
+    wrapOpen('toggleMenu','menu');
+    wrapOpen('toggleSearch','search');
+    wrapOpen('openUtility','utility',false);
+    wrapOpen('toggleTxForm','txForm');
+    wrapOpen('openGoal','goal');
+    wrapOpen('openCommitment','commitment');
+    wrapOpen('openAccountDetail','account');
+    wrapOpen('openAnalysisCategory','analysisCategory');
+    wrapOpen('openCategoryMergeOverlay','categoryMerge');
+    wrapOpen('startTransactionCategoryEdit','txCategoryEdit');
+    wrapOpen('startAccountTypeEdit','accountTypeEdit');
+    wrapOpen('startEditCategory','goalCategoryEdit');
+    wrapOpen('toggleAddCat','goalCategoryAdd');
+    wrapOpen('toggleAddGoal','goalAdd');
+    wrapOpen('toggleAcctForm','accountForm');
+    wrapOpen('startEditAccount','accountForm');
+    wrapOpen('startEditProfile','profileEdit');
+    wrapClose('toggleMenu','menu');
+    wrapClose('toggleSearch','search');
+    wrapClose('closeUtility','utility');
+    wrapClose('toggleTxForm','txForm');
+    wrapClose('backToGoals','goal');
+    wrapClose('backToCommitments','commitment');
+    wrapClose('closeAccountDetail','account');
+    wrapClose('closeAnalysisCategoryDetail','analysisCategory');
+    wrapClose('closeCategoryMergeOverlay','categoryMerge');
+    wrapClose('cancelTransactionCategoryEdit','txCategoryEdit');
+    wrapClose('cancelAccountTypeEdit','accountTypeEdit');
+    wrapClose('cancelEditCategory','goalCategoryEdit');
+    wrapClose('cancelAcctForm','accountForm');
+    wrapClose('cancelEditProfile','profileEdit');
+    window.addEventListener('popstate',function(){
+      var kind=active || (history.state&&history.state.dmoneyUI);
+      if(!kind) return;
+      suppress=true;
+      try{
+        if(kind==='menu') WBT.toggleMenu(false);
+        else if(kind==='search') WBT.toggleSearch(false);
+        else if(kind==='utility') WBT.closeUtility();
+        else if(kind==='txForm') WBT.toggleTxForm(false);
+        else if(kind==='goal') WBT.backToGoals();
+        else if(kind==='commitment') WBT.backToCommitments();
+        else if(kind==='account') WBT.closeAccountDetail();
+        else if(kind==='analysisCategory') WBT.closeAnalysisCategoryDetail();
+        else if(kind==='categoryMerge') WBT.closeCategoryMergeOverlay();
+        else if(kind==='txCategoryEdit') WBT.cancelTransactionCategoryEdit();
+        else if(kind==='accountTypeEdit') WBT.cancelAccountTypeEdit();
+        else if(kind==='goalCategoryEdit') WBT.cancelEditCategory();
+        else if(kind==='goalCategoryAdd') WBT.toggleAddCat(false);
+        else if(kind==='goalAdd') WBT.toggleAddGoal(false);
+        else if(kind==='accountForm') WBT.cancelAcctForm();
+        else if(kind==='profileEdit') WBT.cancelEditProfile();
+      } finally { active=null; suppress=false; if(history.state && history.state.dmoneyUI) history.replaceState(null,'',location.href); }
+    });
+  })();
   window.WBT = WBT;
   load();
   refreshNotifications();
@@ -2502,12 +2582,6 @@
 })();
 </script>
 
-<script>
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function () {
-    navigator.serviceWorker.register('./sw.js').catch(function () {});
-  });
-}
-</script>
+<script>if("serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("./sw.js").catch(function(){});});}</script>
 </body>
 </html>
