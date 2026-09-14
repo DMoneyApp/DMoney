@@ -1,5 +1,5 @@
-// DMoney service worker — caches the app shell so it works 100% offline after first load.
-const CACHE_NAME = 'dmoney-cache-v2';
+// DMoney service worker — caches the app shell so it works offline after first load.
+const CACHE_NAME = 'dmoney-cache-v3';
 const APP_SHELL = [
   './index.html',
   './manifest.json',

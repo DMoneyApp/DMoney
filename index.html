@@ -2,16 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>DMoney</title>
-<link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#170D10">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="DMoney">
-<link rel="apple-touch-icon" href="icon-180.png">
-<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <style>
   :root {
     --bg1: #2A1319; --bg2: #170D10; --bg3: #120A0C;
@@ -385,6 +377,7 @@
 .notification-list{display:grid;gap:8px}.notification-item{width:100%;display:flex;align-items:flex-start;gap:10px;padding:12px;border:1px solid var(--card-border);border-radius:13px;background:var(--card);color:var(--text);text-align:left;cursor:pointer;position:relative}.notification-item.unread{border-color:rgba(217,164,65,.55);background:var(--card-hover)}.notification-item.read{opacity:.72}.notification-icon{width:34px;height:34px;display:flex;align-items:center;justify-content:center;border-radius:10px;background:var(--input-bg);font-size:17px;flex:0 0 34px}.notification-body{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}.notification-body b{font-size:13px}.notification-body span{font-size:12px;line-height:1.45;color:var(--muted)}.notification-body small{font-size:10px;color:var(--faint)}.notification-dot{width:8px;height:8px;border-radius:50%;background:var(--rose);flex:0 0 8px;margin-top:5px}.notification-panel{position:fixed;inset:0;z-index:96;background:var(--bg3);overflow:auto;padding:14px 16px calc(40px + env(safe-area-inset-bottom));margin:0}
 .menu-item .notification-badge{margin-left:7px;margin-right:2px;box-shadow:none}.notification-menu-meta{font-size:10px;color:var(--muted);white-space:nowrap;margin-left:auto}
 </style>
+  <link rel="manifest" href="./manifest.json">
 </head>
 <body>
 <div id="app"></div>
@@ -602,8 +595,8 @@
     showTxForm: false,
     editingTxId: null,
     txView: 'list',
-    period: 'all',
-    periodValue: todayStr(),
+    period: 'month',
+    periodValue: monthOf(todayStr()),
     acctFilter: 'all', acctFilters: ['all'],
     showMenu: false, showSearch: false, searchQuery: '', utility: '', settingsSection: '', showAnalysisPicker:false, showAnalysisAccounts:false, analysisRange: 'yearly', analysisYear: yearOf(todayStr()), analysisMonth: monthOf(todayStr()), analysisDate: todayStr(), analysisAccountIds: ['all'], analysisType: 'expense', analysisView: 'expenseOverview', analysisCategoryDetail: null, monthlyRange: 'yearly', carryYear: yearOf(todayStr()), monthlySort: 'asc', monthlyHideEmpty: false,
     privacyHideAll: false, privacyHidden: {},
@@ -643,7 +636,7 @@
     state.editingGoalId = null; state.showAddGoal = false;
     state.editingCatId = null; state.editingTransactionCategoryId = null; state.showAddCat = false;
     state.showTxForm = false; state.editingTxId = null; state.txType = 'expense'; state.txView = 'list';
-    state.period = 'all'; state.periodValue = todayStr(); state.acctFilter = 'all'; state.acctFilters = ['all']; state.analysisRange='yearly'; state.analysisYear=yearOf(todayStr()); state.analysisMonth=monthOf(todayStr()); state.analysisDate=todayStr(); state.analysisAccountIds=['all']; state.analysisType='expense'; state.analysisView='expenseOverview'; state.analysisCategoryDetail=null; state.monthlyRange='yearly'; state.carryYear=yearOf(todayStr()); state.monthlySort='asc'; state.monthlyHideEmpty=false; state.showMenu=false; state.showSearch=false; state.showAccountPicker=false; state.searchQuery=''; state.utility=''; state.calcExpr=''; state.txDraftCategory='';
+    state.period = 'month'; state.periodValue = monthOf(todayStr()); state.acctFilter = 'all'; state.acctFilters = ['all']; state.analysisRange='yearly'; state.analysisYear=yearOf(todayStr()); state.analysisMonth=monthOf(todayStr()); state.analysisDate=todayStr(); state.analysisAccountIds=['all']; state.analysisType='expense'; state.analysisView='expenseOverview'; state.analysisCategoryDetail=null; state.monthlyRange='yearly'; state.carryYear=yearOf(todayStr()); state.monthlySort='asc'; state.monthlyHideEmpty=false; state.showMenu=false; state.showSearch=false; state.showAccountPicker=false; state.searchQuery=''; state.utility=''; state.calcExpr=''; state.txDraftCategory='';
     state.showAcctForm = false; state.editingAcctId = null;
     state.commitmentFormVisible = false; state.editingCommitmentId = null;
     state.showAddProfile = false; state.editingProfileId = null;
@@ -1326,7 +1319,7 @@
 
   function render() {
     var app=document.getElementById('app');
-    app.innerHTML=renderTopBanner()+renderBrandHeader()+renderProfileBar()+renderTabs()+ (state.tab==='analysis'?renderAnalysisTab():state.tab==='goals'?(state.view==='goalDetail'?renderGoalDetail():state.view==='commitmentDetail'?renderGoalsSubtabs()+renderCommitmentDetail():state.view==='commitmentsList'?renderGoalsSubtabs()+renderCommitmentsList():renderGoalsList()):state.tab==='planning'?renderPlanningTab():state.tab==='transactions'?renderTransactionsTab():state.tab==='accounts'?(state.view==='accountDetail'?renderAccountDetail(state.activeAccountId):renderAccountsTab()):renderBackupTab()) + renderMenu()+renderSearch()+renderUtility() + (!state.showTxForm&&!state.utility&&!state.showSearch?'<button class="fab" onclick="WBT.toggleTxForm(true)">+</button>':'') + (state.showTxForm?renderTxModal():'');
+    app.innerHTML=renderTopBanner()+renderBrandHeader()+renderProfileBar()+renderTabs()+ (state.tab==='analysis'?renderAnalysisTab():state.tab==='goals'?(state.view==='goalDetail'?renderGoalDetail():state.view==='commitmentDetail'?renderGoalsSubtabs()+renderCommitmentDetail():state.view==='commitmentsList'?renderGoalsSubtabs()+renderCommitmentsList():renderGoalsList()):state.tab==='planning'?renderPlanningTab():state.tab==='transactions'?renderTransactionsTab():state.tab==='accounts'?(state.view==='accountDetail'?renderAccountDetail(state.activeAccountId):renderAccountsTab()):renderBackupTab()) + renderMenu()+renderSearch()+renderUtility() + (state.tab==='transactions'&&!state.showTxForm&&!state.utility&&!state.showSearch?'<button class="fab" onclick="WBT.toggleTxForm(true)">+</button>':'') + (state.showTxForm?renderTxModal():'');
   }
   function renderTabs(){function btn(id,icon,label){return '<button class="tab-btn'+(state.tab===id?' active':'')+'" onclick="WBT.setTab('+JSON.stringify(id).replace(/"/g,"&quot;").replace(/&quot;/g,"'")+')"><span style="font-size:14px;">'+icon+'</span><span>'+label+'</span></button>';}; return '<div class="tabs">'+btn('transactions','🧾','Log')+'<button class="tab-btn'+(state.tab==='analysis'?' active':'')+'" onclick="WBT.openAnalysis()"><span style="font-size:14px;">📊</span><span>Analysis</span></button>'+btn('goals','▦','Goals')+btn('accounts','👥','Accounts')+'</div>'; }
 
@@ -1843,8 +1836,8 @@
   }
   var WBT = {
     openAnalysis:function(){state.tab='analysis';state.view='goalsList';state.activeGoalId=null;state.activeCommitmentId=null;state.goalsSubtab=(state.goalsSubtab||'financial');state.showTxForm=false;state.utility='';state.showMenu=false;state.showSearch=false;state.showAccountPicker=false;render();},
-    goHome: function () { state.tab='transactions'; state.view='log'; state.activeGoalId=null; state.activeCommitmentId=null; state.showMenu=false; state.showSearch=false; state.showAccountPicker=false; state.utility=''; state.showTxForm=false; render(); },
-    setTab: function (t) { state.tab=t; state.view='goalsList'; state.activeGoalId=null; state.activeCommitmentId=null; state.goalsSubtab=(state.goalsSubtab||'financial'); state.showTxForm=false; state.utility=''; state.showMenu=false; state.showSearch=false; state.showAccountPicker=false; render(); },
+    goHome: function () { state.tab='transactions'; state.view='log'; state.period='month'; state.periodValue=monthOf(todayStr()); state.activeGoalId=null; state.activeCommitmentId=null; state.showMenu=false; state.showSearch=false; state.showAccountPicker=false; state.utility=''; state.showTxForm=false; render(); },
+    setTab: function (t) { state.tab=t; if(t==='transactions'){state.view='log';state.period='month';state.periodValue=monthOf(todayStr());} else {state.view='goalsList';} state.activeGoalId=null; state.activeCommitmentId=null; state.goalsSubtab=(state.goalsSubtab||'financial'); state.showTxForm=false; state.utility=''; state.showMenu=false; state.showSearch=false; state.showAccountPicker=false; render(); },
     setBetaField:function(id,value){var b=state.betaSimulator||betaMonthlyDefaults();if(id==='horizon')b.horizon=Number(value)||12;else if(id==='startingBalance')b.startingBalance=Number(value)||0;else if(id==='monthlyIncome')b.monthlyIncome=Number(value)||0;else if(id==='monthlyExpenses')b.monthlyExpenses=Number(value)||0;else if(id==='monthlyCommitments')b.monthlyCommitments=Number(value)||0;else if(id==='monthlyGoals')b.monthlyGoals=Number(value)||0;b.calculated=false;state.betaSimulator=b;},
     calculateFutureMoney:function(){var b=state.betaSimulator||betaMonthlyDefaults();['startingBalance','monthlyIncome','monthlyExpenses','monthlyCommitments','monthlyGoals'].forEach(function(k){b[k]=Math.max(0,Number(b[k])||0);});b.horizon=Math.max(1,Math.min(24,Number(b.horizon)||12));b.calculated=true;state.betaSimulator=b;save();render();},
     resetFutureMoney:function(){state.betaSimulator=betaMonthlyDefaults();save();render();},
@@ -2510,84 +2503,11 @@
 </script>
 
 <script>
-(function () {
-  'use strict';
-  if (typeof window.WBT === 'undefined') return;
-  var WBT = window.WBT;
-  var navStack = [];
-  var poppingFromHistory = false;
-
-  function pushNav(entry) {
-    if (poppingFromHistory) return;
-    history.pushState({ dmoneyNav: true }, '', location.href);
-    navStack.push(entry);
-  }
-
-  function wrapToggle(name, isOpenFn) {
-    var orig = WBT[name];
-    if (typeof orig !== 'function') return;
-    WBT[name] = function (v) {
-      if (v) {
-        orig.apply(WBT, arguments);
-        pushNav({ fn: orig, arg: false, isOpen: isOpenFn });
-      } else {
-        if (navStack.length > 0 && !poppingFromHistory) {
-          history.back();
-        } else {
-          orig.apply(WBT, arguments);
-        }
-      }
-    };
-  }
-
-  function wrapPair(openName, closeName, isOpenFn) {
-    var origOpen = WBT[openName];
-    var origClose = WBT[closeName];
-    if (typeof origOpen !== 'function' || typeof origClose !== 'function') return;
-    WBT[openName] = function () {
-      var r = origOpen.apply(WBT, arguments);
-      pushNav({ fn: origClose, arg: undefined, isOpen: isOpenFn });
-      return r;
-    };
-    WBT[closeName] = function () {
-      if (navStack.length > 0 && !poppingFromHistory) {
-        history.back();
-      } else {
-        origClose.apply(WBT, arguments);
-      }
-    };
-  }
-
-  window.addEventListener('popstate', function () {
-    while (navStack.length > 0) {
-      var top = navStack.pop();
-      if (top.isOpen && !top.isOpen()) continue; // already closed some other way (e.g. Save) — skip silently
-      poppingFromHistory = true;
-      try { top.fn(top.arg); } finally { poppingFromHistory = false; }
-      return;
-    }
-    // nothing of ours was open — let the back gesture behave normally (exit/minimize)
-  });
-
-  wrapToggle('toggleTxForm', function () { return !!document.querySelector('.tx-modal'); });
-  wrapToggle('toggleMenu', function () { return !!document.querySelector('.side-menu'); });
-  wrapToggle('toggleSearch', function () { return !!document.getElementById('dmoneySearchInput'); });
-  wrapPair('openGoal', 'backToGoals', function () { return !!document.querySelector('.back-btn'); });
-  wrapPair('openUtility', 'closeUtility', function () { return !!document.querySelector('.utility-panel, .notification-panel'); });
-  wrapPair('startTransactionCategoryEdit', 'cancelTransactionCategoryEdit', function () { return !!document.getElementById('dmoneyEditOverlay'); });
-  wrapPair('startAccountTypeEdit', 'cancelAccountTypeEdit', function () { return !!document.getElementById('dmoneyEditOverlay'); });
-})();
-</script>
-
-<script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {
-    navigator.serviceWorker.register('sw.js').catch(function (err) {
-      console.log('Service worker registration failed (offline install may not work):', err);
-    });
+    navigator.serviceWorker.register('./sw.js').catch(function () {});
   });
 }
 </script>
-
 </body>
 </html>
