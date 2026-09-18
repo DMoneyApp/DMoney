@@ -2,8 +2,16 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>DMoney</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#170D10">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="DMoney">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <style>
   :root {
     --bg1: #2A1319; --bg2: #170D10; --bg3: #120A0C;
@@ -616,7 +624,7 @@
     acctFormIncludeTotal: true,
     commitmentFormVisible: false,
     editingCommitmentId: null,
-    externalPaymentFormVisible: false,
+    editingExternalPaymentId: null,
     notifications: [],
     betaSimulator: { startingBalance: null, monthlyIncome: null, monthlyExpenses: null, monthlyCommitments: null, monthlyGoals: 0, horizon: 12, calculated: false }, betaEmiPlanner: { principal: null, rate: null, tenure: null, emi: null, extra: 0, calculated: false }, betaCrossProfile: { sourceProfileId: null, sourceAccountId: null, destinationProfileId: null, destinationAccountId: null, amount: 0, rate: null, note: '', description: '', rateMode: 'manual', rateFetchedAt: '' }
   };
@@ -628,6 +636,7 @@
     state.activeProfileId = p.id;
     state.goals = Array.isArray(p.goals) ? p.goals : DEFAULT_GOALS.slice();
     state.commitments = Array.isArray(p.commitments) ? p.commitments : [];
+    state.commitments.forEach(function(c){ if(!Array.isArray(c.externalPayments)) c.externalPayments=[]; });
     state.notifications = Array.isArray(p.notifications) ? p.notifications : [];
     state.betaSimulator = (p.betaSimulator && typeof p.betaSimulator === 'object') ? Object.assign({startingBalance:null,monthlyIncome:null,monthlyExpenses:null,monthlyCommitments:null,monthlyGoals:0,horizon:12,calculated:false}, p.betaSimulator) : {startingBalance:null,monthlyIncome:null,monthlyExpenses:null,monthlyCommitments:null,monthlyGoals:0,horizon:12,calculated:false}; state.betaEmiPlanner=(p.betaEmiPlanner&&typeof p.betaEmiPlanner==='object')?Object.assign({principal:null,rate:null,tenure:null,emi:null,extra:0,calculated:false},p.betaEmiPlanner):{principal:null,rate:null,tenure:null,emi:null,extra:0,calculated:false};
     state.accounts = p.accounts;
@@ -642,12 +651,11 @@
     // reset transient UI so nothing points at another profile's items
     state.tab = 'transactions'; state.view = 'log'; state.activeGoalId = null; state.activeCommitmentId = null; state.goalsSubtab = 'financial';
     state.editingGoalId = null; state.showAddGoal = false;
-    state.externalPaymentFormVisible = false;
     state.editingCatId = null; state.editingTransactionCategoryId = null; state.showAddCat = false;
     state.showTxForm = false; state.editingTxId = null; state.txType = 'expense'; state.txView = 'list';
     state.period = 'month'; state.periodValue = monthOf(todayStr()); state.acctFilter = 'all'; state.acctFilters = ['all']; state.analysisRange='yearly'; state.analysisYear=yearOf(todayStr()); state.analysisMonth=monthOf(todayStr()); state.analysisDate=todayStr(); state.analysisAccountIds=['all']; state.analysisType='expense'; state.analysisView='expenseOverview'; state.analysisCategoryDetail=null; state.monthlyRange='yearly'; state.carryYear=yearOf(todayStr()); state.monthlySort='asc'; state.monthlyHideEmpty=false; state.showMenu=false; state.showSearch=false; state.showAccountPicker=false; state.searchQuery=''; state.utility=''; state.calcExpr=''; state.txDraftCategory='';
     state.showAcctForm = false; state.editingAcctId = null;
-    state.commitmentFormVisible = false; state.editingCommitmentId = null;
+    state.commitmentFormVisible = false; state.editingCommitmentId = null; state.editingExternalPaymentId = null;
     state.showAddProfile = false; state.editingProfileId = null;
   }
 
@@ -925,7 +933,6 @@
     return total ? '<span class="notification-menu-meta">'+total+(total===1?' notification':' notifications')+(n?' · '+n+' new':'')+'</span>' : '';
   }
   function renderNotifications(){
-    refreshNotifications();
     var arr=(state.notifications||[]).slice();
     var h='<div class="notification-panel"><div class="utility-head"><div><div class="utility-title">🔔 Notifications</div><div style="font-size:11px;color:var(--muted);margin-top:3px;">EMI reminders and important DMoney alerts</div></div><button class="header-icon" onclick="WBT.closeUtility()">×</button></div>';
     h+='<div class="notification-actions"><button class="btn btn-outline" onclick="WBT.markAllNotificationsRead()">✓ Mark all as read</button><button class="btn btn-cancel" onclick="WBT.clearNotifications()">🗑 Clear history</button></div>';
@@ -979,7 +986,7 @@
     '<div class="help-section"><h3>🎯 6. Goals — how funding works</h3><ul><li>Goals are funded according to their displayed priority order.</li><li>Move a goal <b>up or down</b> when its priority changes.</li><li>Open a goal to add, edit, reorder or delete budget items.</li><li>Change the goal status when required.</li><li>Funding comes from accounts marked <b>Count this account toward the budget</b>.</li><li><b>Overall funded</b> shows progress across your planned goal amounts.</li></ul></div>'+
     '<div class="help-section"><h3>🏦 7. Accounts — track your actual money</h3><ol><li>Open <b>Accounts</b>.</li><li>Tap <b>+ Add an account</b>.</li><li>Choose the account type and enter its name and opening balance.</li><li>Choose whether it counts toward the budget and/or total balance.</li><li>Save. Future Income, Expense and Transfer entries update the account balance.</li></ol><p>The two account switches are independent, so an account can be included in both, one, or neither.</p></div>'+
     '<div class="help-section"><h3>🏠 8. How to track Assets</h3><p>Use <b>Accounts</b> to keep each major asset visible separately. When adding an account, choose a visual asset type such as <b>🪙 Gold, 🏠 Property / Real Estate, 🚗 Vehicle, 📈 Stocks, 📊 Mutual Fund or 🌱 SIP / Investment</b>.</p><ol><li>Open <b>Accounts → + Add an account</b>.</li><li>Give the asset a clear name, for example <b>Gold Jewellery, Flat, Car, HDFC Mutual Fund</b> or <b>Monthly SIP</b>.</li><li>Select the matching asset type so the account gets its own visual icon.</li><li>Enter the current/opening value you want DMoney to track.</li><li>Keep <b>Count this account toward total balance</b> enabled if you want the asset included in your overall balance.</li></ol><p><b>Gold:</b> create a Gold account for jewellery, coins or bars and enter the value you want to track. You can update the balance when your estimated value changes.</p><p><b>Property:</b> create a Property / Real Estate account such as “Apartment” or “Plot” and enter its tracked value. Update it manually when you want your recorded value to reflect a new estimate.</p><p><b>Stocks / Mutual Funds / SIP:</b> use the matching visual account type for the value you choose to track. DMoney does not fetch live prices, NAV, units or market returns automatically.</p><p><b>Important:</b> DMoney is a manual offline-first tracker. It does not independently verify market value, gold rates or property valuations.</p></div>'+
-    '<div class="help-section"><h3>🧾 9. How to track EMI &amp; Commitments</h3><p>Use <b>Goals → EMI &amp; Commitments</b> for Flat, Car, Personal Loan and other long-term payment commitments.</p><ol><li>Add the commitment and enter its <b>Total Amount</b>, <b>Already Paid</b> amount and optional <b>Expected Monthly Payment</b>.</li><li>Whenever you actually pay, record it once in <b>Log → Expense</b>.</li><li>In the Expense entry, optionally choose <b>Link to EMI / Commitment</b>.</li><li>Multiple payments for the same commitment in one month are all counted.</li><li>Open the commitment to see payment history grouped month-wise, while linked payments remain part of normal Expense history.</li><li>Use <b>Add External Payment</b> for payments made outside DMoney, such as a family member paying from their own account. These count toward the commitment only and do not change Log or any DMoney account balance.</li><li>When the total is reached, mark the commitment <b>Completed</b>.</li></ol></div>'+
+    '<div class="help-section"><h3>🧾 9. How to track EMI &amp; Commitments</h3><p>Use <b>Goals → EMI &amp; Commitments</b> for Flat, Car, Personal Loan and other long-term payment commitments.</p><ol><li>Add the commitment and enter its <b>Total Amount</b>, <b>Already Paid</b> amount and optional <b>Expected Monthly Payment</b>.</li><li>Whenever you actually pay, record it once in <b>Log → Expense</b>.</li><li>In the Expense entry, optionally choose <b>Link to EMI / Commitment</b>.</li><li>Multiple payments for the same commitment in one month are all counted.</li><li>Open the commitment to see payment history grouped month-wise, while those payments remain part of normal Expense history.</li><li>When the total is reached, mark the commitment <b>Completed</b>.</li></ol></div>'+
     '<div class="help-section"><h3>📈 10. How to track SIP / Investments</h3><p>There is no automatic SIP mandate or market-value calculator in the current version. For manual tracking:</p><ol><li>Record each SIP payment in <b>Log → Expense</b>.</li><li>Use the <b>Investment</b> category or create a custom category such as “SIP”.</li><li>Choose the account from which the SIP amount was paid.</li><li>For a planned monthly SIP, create a goal/budget target to reserve the amount you want to invest.</li></ol><p>This tracks the <b>cash leaving your account</b>. It does not fetch NAV, units, returns or live investment values.</p></div>'+
     '<div class="help-section"><h3>🏷️ 11. Categories — organise transactions</h3><ul><li>Built-in categories include Food, Salary, Shopping, Electronics, Recharge, Bills, Flight, Travelling, Transport, Rent, Health, Entertainment, Education, Gifts, Investment and Other.</li><li>While entering a transaction, use <b>+ Category</b> to create one immediately.</li><li>Or go to <b>☰ → Settings → Category Customization</b>.</li><li>Custom transaction categories are stored separately for each profile.</li><li>Use <b>Merge Categories</b> to combine similar categories and automatically update all matching historical transactions.</li></ul></div>'+
     '<div class="help-section"><h3>🔎 12. Search & transaction analysis</h3><ol><li>Tap the <b>search icon</b> in the header.</li><li>Search by note, category, account, date or transaction type.</li><li>Use Log filters for <b>All time, Day, Month or Year</b>.</li><li>Use the account filter to analyse one account or all accounts.</li></ol><p>Income is consistently <b>green</b>, Expense is consistently <b>red</b>, and Transfer is consistently <b>gold</b> in every theme.</p></div>'+
@@ -1053,18 +1060,20 @@
   }
   function commitmentById(id){ return (state.commitments||[]).filter(function(c){return c.id===id;})[0]; }
   function commitmentPayments(c){ return state.transactions.filter(function(t){return t.type==='expense' && t.commitmentId===c.id;}).sort(function(a,b){var da=(a.date||'')+' '+(a.time||''), db=(b.date||'')+' '+(b.time||'');return da<db?1:-1;}); }
-  function commitmentExternalPayments(c){ return (Array.isArray(c.externalPayments)?c.externalPayments:[]).slice().sort(function(a,b){var da=(a.date||'')+' '+(a.time||''), db=(b.date||'')+' '+(b.time||'');return da<db?1:-1;}); }
+  function commitmentExternalPayments(c){
+    var rows=Array.isArray(c.externalPayments)?c.externalPayments:[];
+    return rows.map(function(x){return Object.assign({},x,{source:'external'});}).sort(function(a,b){var da=(a.date||'')+' '+(a.time||''), db=(b.date||'')+' '+(b.time||'');return da<db?1:-1;});
+  }
   function commitmentStats(c){
-    var historical=Number(c.alreadyPaid)||0, payments=commitmentPayments(c), external=commitmentExternalPayments(c), newPaid=payments.reduce(function(sum,t){return sum+(Number(t.amount)||0);},0), externalPaid=external.reduce(function(sum,t){return sum+(Number(t.amount)||0);},0), total=Number(c.totalAmount)||0;
+    var historical=Number(c.alreadyPaid)||0, payments=commitmentPayments(c), external=commitmentExternalPayments(c), newPaid=payments.reduce(function(s,t){return s+(Number(t.amount)||0);},0), externalPaid=external.reduce(function(s,t){return s+(Number(t.amount)||0);},0), total=Number(c.totalAmount)||0;
     var paid=historical+newPaid+externalPaid, remaining=Math.max(0,total-paid), pct=total>0?Math.min(100,paid/total*100):0;
     return {historical:historical,newPaid:newPaid,externalPaid:externalPaid,paid:paid,total:total,remaining:remaining,pct:pct,payments:payments,externalPayments:external};
   }
   function commitmentMonthRows(c){
-    var all=[];
-    commitmentPayments(c).forEach(function(t){all.push({kind:'linked',item:t,date:t.date||'',time:t.time||'',amount:Number(t.amount)||0});});
-    commitmentExternalPayments(c).forEach(function(t){all.push({kind:'external',item:t,date:t.date||'',time:t.time||'',amount:Number(t.amount)||0});});
-    var by={}; all.forEach(function(t){var m=monthOf(t.date);(by[m]||(by[m]=[])).push(t);});
-    return Object.keys(by).sort().reverse().map(function(m){var rows=by[m].slice().sort(function(a,b){return (a.date+a.time)<(b.date+b.time)?1:-1;});return {ym:m,rows:rows,total:rows.reduce(function(sum,t){return sum+t.amount;},0)};});
+    var by={};
+    commitmentPayments(c).forEach(function(t){var m=monthOf(t.date);(by[m]||(by[m]=[])).push(Object.assign({},t,{source:'account'}));});
+    commitmentExternalPayments(c).forEach(function(t){var m=monthOf(t.date);(by[m]||(by[m]=[])).push(t);});
+    return Object.keys(by).sort().reverse().map(function(m){var rows=by[m].slice().sort(function(a,b){var da=(a.date||'')+(a.time||''),db=(b.date||'')+(b.time||'');return da<db?1:-1;});return {ym:m,rows:rows,total:rows.reduce(function(s,t){return s+(Number(t.amount)||0);},0)};});
   }
   function renderCommitmentsList(){
     var cs=state.commitments||[], active=cs.filter(function(c){return c.status!=='completed';}).length;
@@ -1078,37 +1087,29 @@
   }
   function renderCommitmentForm(){
     var c=state.editingCommitmentId?commitmentById(state.editingCommitmentId):null;
-    return '<div class="form-box"><div class="section-title" style="margin:0 0 2px;">'+(c?'Edit Commitment':'Add Commitment')+'</div><input id="commitmentName" placeholder="e.g. Flat EMI" value="'+esc(c?c.name:'')+'"><div class="field-pair"><div><div class="field-label">Total Amount</div><input id="commitmentTotal" type="number" min="0" value="'+(c?c.totalAmount:'')+'" placeholder="3000000"></div><div><div class="field-label">Already Paid</div><input id="commitmentPaid" type="number" min="0" value="'+(c?c.alreadyPaid:'')+'" placeholder="1270000"></div></div><div class="field-pair"><div><div class="field-label">Expected Monthly Payment</div><input id="commitmentMonthly" type="number" min="0" value="'+(c?c.expectedMonthly:'')+'" placeholder="20000"></div><div><div class="field-label">Icon</div><input id="commitmentIcon" value="'+esc(c?c.icon||'📌':'📌')+'" maxlength="4"></div></div><div class="field-label">Notes (optional)</div><input id="commitmentNotes" value="'+esc(c?c.notes||'':'')+'" placeholder="Optional note"><div class="row-gap"><button class="btn btn-gold" onclick="WBT.saveCommitment()">✓ '+(c?'Save changes':'Add commitment')+'</button><button class="btn btn-cancel" onclick="WBT.cancelCommitmentForm()">✕ Cancel</button></div></div>';
+    return '<div class="form-box"><div class="section-title" style="margin:0 0 2px;">'+(c?'Edit Commitment':'Add Commitment')+'</div><input id="commitmentName" placeholder="e.g. Flat EMI" value="'+esc(c?c.name:'')+'"><div class="field-pair"><div><div class="field-label">Total Amount</div><input id="commitmentTotal" type="number" min="0" value="'+(c?c.totalAmount:'')+'" placeholder="3000000"></div><div><div class="field-label">Starting Paid Amount</div><input id="commitmentPaid" type="number" min="0" value="'+(c?c.alreadyPaid:'')+'" placeholder="0"></div></div><div class="field-pair"><div><div class="field-label">Expected Monthly Payment</div><input id="commitmentMonthly" type="number" min="0" value="'+(c?c.expectedMonthly:'')+'" placeholder="20000"></div><div><div class="field-label">Icon</div><input id="commitmentIcon" value="'+esc(c?c.icon||'📌':'📌')+'" maxlength="4"></div></div><div class="field-label">Notes (optional)</div><input id="commitmentNotes" value="'+esc(c?c.notes||'':'')+'" placeholder="Optional note"><div class="monthly-goals-note" style="margin-top:8px;">Starting Paid Amount is only for money already paid before you began tracking it in DMoney. New payments should be linked from Log or added as External Payments.</div><div class="row-gap"><button class="btn btn-gold" onclick="WBT.saveCommitment()">✓ '+(c?'Save changes':'Add commitment')+'</button><button class="btn btn-cancel" onclick="WBT.cancelCommitmentForm()">✕ Cancel</button></div></div>';
   }
-  function renderExternalPaymentForm(c){
-    return '<div class="form-box" style="margin-top:12px;"><div class="section-title" style="margin:0 0 2px;">Add External Payment</div><div class="monthly-goals-note" style="margin-bottom:8px;">Record money paid outside DMoney. It affects this commitment only — not Log and not any account balance.</div><div class="field-pair"><div><div class="field-label">Amount</div><input id="externalPaymentAmount" type="number" min="0" step="0.01" placeholder="50000" inputmode="decimal"></div><div><div class="field-label">Date</div><input id="externalPaymentDate" type="date" value="'+todayStr()+'"></div></div><div class="field-pair"><div><div class="field-label">Paid by</div><input id="externalPaymentPayer" value="Father" placeholder="e.g. Father"></div><div><div class="field-label">Note</div><input id="externalPaymentNote" placeholder="Flat payment"></div></div><div class="row-gap"><button class="btn btn-gold" onclick="WBT.addExternalPayment(' + "'" + c.id + "'" + ')">+ Add payment</button><button class="btn btn-cancel" onclick="WBT.toggleExternalPaymentForm(false)">✕ Cancel</button></div></div>';
+  function renderExternalPaymentForm(c, editId){
+    var x=(Array.isArray(c.externalPayments)?c.externalPayments:[]).filter(function(r){return r.id===editId;})[0]||null;
+    return '<div class="form-box" id="externalPaymentForm"><div class="section-title" style="margin:0 0 2px;">'+(x?'Edit External Payment':'Add External Payment')+'</div><div class="field-pair"><div><div class="field-label">Amount</div><input id="externalAmount" type="number" min="0" value="'+(x?Number(x.amount)||'':'')+'" placeholder="50000" inputmode="decimal"></div><div><div class="field-label">Date</div><input id="externalDate" type="date" value="'+esc(x&&x.date?x.date:todayStr())+'"></div></div><div class="field-pair"><div><div class="field-label">Paid by</div><input id="externalPaidBy" value="'+esc(x?x.paidBy||'':'')+'" placeholder="Father"></div><div><div class="field-label">Note</div><input id="externalNote" value="'+esc(x?x.note||'Flat payment':'Flat payment')+'"></div></div><div class="field-label">Description (optional)</div><textarea id="externalDescription" rows="2" placeholder="Optional description">'+esc(x?x.description||'':'')+'</textarea><div class="row-gap"><button class="btn btn-gold" onclick="WBT.saveExternalPayment(\''+c.id+'\','+(x?JSON.stringify(x.id):'null')+')">✓ '+(x?'Save changes':'Save External Payment')+'</button><button class="btn btn-cancel" onclick="WBT.cancelExternalPayment()">✕ Cancel</button></div></div>';
   }
-
   function renderCommitmentDetail(){
     var c=commitmentById(state.activeCommitmentId); if(!c){state.view='commitmentsList';return renderCommitmentsList();}
     var s=commitmentStats(c), rows=commitmentMonthRows(c), html='<button class="back-btn" onclick="WBT.backToCommitments()">‹ All commitments</button><div class="goal-header-row"><div><div class="goal-name" style="font-size:20px;">'+esc(c.icon||'📌')+' '+esc(c.name)+'</div><div class="goal-sub">'+(c.status==='completed'?'Completed':c.status==='paused'?'Paused':'Active')+'</div></div><span class="status-badge '+(c.status==='completed'?'status-achieved':c.status==='paused'?'status-in_progress':'status-not_started')+'">'+(c.status==='completed'?'Completed':c.status==='paused'?'Paused':'Active')+'</span></div>';
-    html+='<div class="grid3" style="margin-bottom:14px;">'+sumCard('Total',fmt(s.total),'var(--rose)',true)+sumCard('Already Paid',fmt(s.historical),'var(--gold)',true)+sumCard('New Payments',fmt(s.newPaid),'var(--green)',true)+sumCard('Remaining',fmt(s.remaining),'var(--rose)',true)+sumCard('% Complete',s.pct.toFixed(0)+'%','var(--gold)',true)+sumCard('Expected Monthly',fmt(Number(c.expectedMonthly)||0),'var(--green)',true)+'</div>'+(c.interestRate!=null||c.originalTenure?'<div class="monthly-goals-note">Loan details: '+(c.interestRate!=null?esc(String(c.interestRate))+'% interest':'')+(c.originalTenure?' · '+esc(String(c.originalTenure))+' months original tenure':'')+(Number(c.extraPayment)>0?' · '+fmt(c.extraPayment)+' extra/month':'')+'</div>':'')+'<div class="bar-bg"><div class="bar-fill" style="width:'+s.pct+'%;background:'+(s.pct>=100?'var(--green)':'var(--gold)')+';"></div></div>';
+    html+='<div class="grid3" style="margin-bottom:14px;">'+sumCard('Total',fmt(s.total),'var(--rose)',true)+sumCard('Paid',fmt(s.paid),'var(--green)',true)+sumCard('Pending',fmt(s.remaining),'var(--gold)',true)+sumCard('My Account Payments',fmt(s.newPaid),'var(--green)',true)+sumCard('External Payments',fmt(s.externalPaid),'var(--gold)',true)+sumCard('Expected Monthly',fmt(Number(c.expectedMonthly)||0),'var(--green)',true)+'</div>'+(c.interestRate!=null||c.originalTenure?'<div class="monthly-goals-note">Loan details: '+(c.interestRate!=null?esc(String(c.interestRate))+'% interest':'')+(c.originalTenure?' · '+esc(String(c.originalTenure))+' months original tenure':'')+(Number(c.extraPayment)>0?' · '+fmt(c.extraPayment)+' extra/month':'')+'</div>':'')+'<div class="bar-bg"><div class="bar-fill" style="width:'+s.pct+'%;background:'+(s.pct>=100?'var(--green)':'var(--gold)')+';"></div></div>';
     if(Number(c.expectedMonthly)>0&&s.remaining>0) html+='<div class="monthly-goals-note" style="margin-top:10px;">Projected remaining time at expected payment: <b>'+Math.ceil(s.remaining/Number(c.expectedMonthly))+' month(s)</b>.</div>';
-    html+='<div class="row-gap" style="margin:12px 0;flex-wrap:wrap;"><button class="btn '+(c.status==='active'?'btn-green':'')+'" onclick="WBT.setCommitmentStatus(\''+c.id+'\',\'active\')">Active</button><button class="btn '+(c.status==='paused'?'btn-gold':'')+'" onclick="WBT.setCommitmentStatus(\''+c.id+'\',\'paused\')">Paused</button><button class="btn '+(c.status==='completed'?'btn-green':'')+'" onclick="WBT.setCommitmentStatus(\''+c.id+'\',\'completed\')">✓ Completed</button><button class="btn" onclick="WBT.editCommitment(\''+c.id+'\')">✎ Edit</button></div>';
-    html+='<div class="section-title">Payment Sources &amp; History</div><div class="monthly-goals-note">Linked DMoney expenses remain in Log and are shown here date-wise. External payments are recorded only in this commitment and never change your account balance or Log.</div>';
-    html+='<div class="grid2" style="margin:10px 0 12px;">'+sumCard('My Account Payments',fmt(s.newPaid),'var(--green)',true)+sumCard('External Payments',fmt(s.externalPaid),'var(--gold)',true)+'</div>';
-    html+='<div class="row-gap" style="margin:8px 0 12px;"><button class="btn btn-gold" onclick="WBT.toggleExternalPaymentForm(true)">＋ Add External Payment</button></div>';
-    if(state.externalPaymentFormVisible) html+=renderExternalPaymentForm(c);
-    if(s.historical>0) html+='<div class="cat-card"><div class="cat-row"><div><div class="cat-name">Previously paid</div><div class="cat-sub">Amount entered as Already Paid · not itemized</div></div><div class="cat-pct">'+fmt(s.historical)+'</div></div></div>';
-    if(!rows.length) html+='<div class="empty-note">No dated payments yet. Add a Log payment or an External Payment.</div>';
-    rows.forEach(function(group){
-      html+='<div class="cat-card"><div class="cat-row"><div><div class="cat-name">'+esc(group.ym)+'</div><div class="cat-sub">'+group.rows.length+' payment'+(group.rows.length===1?'':'s')+'</div></div><div class="cat-pct">'+fmt(group.total)+'</div></div>';
-      group.rows.forEach(function(r){
-        if(r.kind==='external'){
-          var x=r.item;
-          html+='<div class="tx-item" style="margin-top:7px;"><div class="tx-left"><span>👤</span><div><div class="tx-note">'+esc(x.note||'External payment')+' <span class="tag" style="margin-left:5px;">External · '+esc(x.payer||'Outside DMoney')+'</span></div><div class="tx-date">'+esc(x.date)+(x.time?' · '+esc(x.time):'')+'</div></div></div><div><div class="tx-amt" style="color:var(--gold)">+ '+fmt(x.amount)+'</div><button class="icon-btn" style="display:inline-flex;margin-top:4px;" onclick="WBT.removeExternalPayment(' + "'" + c.id + "'" + ',' + "'" + x.id + "'" + ')">🗑</button></div></div>';
-        } else {
-          var t=r.item,a=state.accounts.filter(function(x){return x.id===t.accountId;})[0];
-          html+='<div class="tx-item" style="margin-top:7px;"><div class="tx-left"><span>🏦</span><div><div class="tx-note">'+esc(t.note||t.category||'Payment')+' <span class="tag" style="margin-left:5px;">My Account</span></div><div class="tx-date">'+esc(t.date)+(t.time?' · '+esc(t.time):'')+(a?' · '+esc(a.name):'')+'</div></div></div><div><div class="tx-amt" style="color:var(--rose)">− '+fmt(t.amount)+'</div><button class="icon-btn" style="display:inline-flex;margin-top:4px;" onclick="WBT.startEditTransaction(' + "'" + t.id + "'" + ')">✎</button></div></div>';
-        }
-      });
-      html+='</div>';
-    });
+    html+='<div class="row-gap" style="margin:12px 0;flex-wrap:wrap;"><button class="btn '+(c.status==='active'?'btn-green':'')+'" onclick="WBT.setCommitmentStatus(\''+c.id+'\',\'active\')">Active</button><button class="btn '+(c.status==='paused'?'btn-gold':'')+'" onclick="WBT.setCommitmentStatus(\''+c.id+'\',\'paused\')">Paused</button><button class="btn '+(c.status==='completed'?'btn-green':'')+'" onclick="WBT.setCommitmentStatus(\''+c.id+'\',\'completed\')">✓ Completed</button><button class="btn" onclick="WBT.editCommitment(\''+c.id+'\')">✎ Edit</button><button type="button" class="btn btn-gold" onclick="WBT.startExternalPayment(\''+c.id+'\');return false;">＋ Add External Payment</button></div>';
+    if(state.editingExternalPaymentId!==null){ html+=renderExternalPaymentForm(c,state.editingExternalPaymentId); }
+    html+='<div class="section-title">Payment Sources</div><div class="monthly-goals-note">Linked Log payments affect your real account balance and remain in Log. External Payments are money paid outside DMoney (for example by a family member); they increase this commitment only and never create an account or Log transaction.</div>';
+    if(s.historical>0) html+='<div class="cat-card"><div class="cat-row"><div><div class="cat-name">Starting / previously paid</div><div class="cat-sub">Amount carried into DMoney tracking</div></div><div class="cat-pct">'+fmt(s.historical)+'</div></div></div>';
+    if(!s.newPaid&&!s.externalPaid&&!s.historical) html+='<div class="empty-note">No payments recorded yet.</div>';
+    if(s.externalPayments.length){
+      html+='<div class="cat-card"><div class="cat-row"><div><div class="cat-name">External Payments</div><div class="cat-sub">Not included in Log or account balances</div></div><div class="cat-pct">'+fmt(s.externalPaid)+'</div></div>';
+      s.externalPayments.forEach(function(x){html+='<div class="tx-item" style="margin-top:7px;"><div class="tx-left"><div><div class="tx-note">'+esc(x.note||'External payment')+'</div><div class="tx-date">'+esc(x.date||'')+(x.paidBy?' · Paid by '+esc(x.paidBy):'')+(x.description?' · '+esc(x.description):'')+'</div></div></div><div><div class="tx-amt" style="color:var(--gold)">+ '+fmt(x.amount)+'</div><div style="display:flex;gap:4px;justify-content:flex-end;margin-top:4px;"><button class="icon-btn" onclick="WBT.startExternalPayment(\''+c.id+'\',\''+x.id+'\')">✎</button><button class="icon-btn" onclick="WBT.removeExternalPayment(\''+c.id+'\',\''+x.id+'\')">🗑</button></div></div></div>';}); html+='</div>';
+    }
+    html+='<div class="section-title">Payment History</div><div class="monthly-goals-note">Account-linked and external payments are shown together by month, with the source clearly identified.</div>';
+    if(!rows.length) html+='<div class="empty-note">No payment history yet.</div>';
+    rows.forEach(function(group){html+='<div class="cat-card"><div class="cat-row"><div><div class="cat-name">'+esc(group.ym)+'</div><div class="cat-sub">'+group.rows.length+' payment'+(group.rows.length===1?'':'s')+'</div></div><div class="cat-pct">'+fmt(group.total)+'</div></div>';group.rows.forEach(function(t){var a=t.source==='account'?state.accounts.filter(function(x){return x.id===t.accountId;})[0]:null;var source=t.source==='external'?'External'+(t.paidBy?' — '+esc(t.paidBy):''):'My Account';html+='<div class="tx-item" style="margin-top:7px;"><div class="tx-left"><div><div class="tx-note">'+esc(t.note||t.category||'Payment')+'</div><div class="tx-date">'+esc(t.date)+(t.time?' · '+esc(t.time):'')+' · '+source+(a?' · '+esc(a.name):'')+'</div></div></div><div><div class="tx-amt" style="color:'+(t.source==='external'?'var(--gold)':'var(--rose)')+'">'+(t.source==='external'?'+':'−')+' '+fmt(t.amount)+'</div>'+(t.source==='account'?'<button class="icon-btn" style="display:inline-flex;margin-top:4px;" onclick="WBT.startEditTransaction(\''+t.id+'\')">✎</button>':'')+'</div></div>';});html+='</div>';});
     return html;
   }
 
@@ -1374,7 +1375,7 @@
 
   function render() {
     var app=document.getElementById('app');
-    app.innerHTML=renderTopBanner()+renderBrandHeader()+renderProfileBar()+renderTabs()+ (state.tab==='analysis'?renderAnalysisTab():state.tab==='goals'?(state.view==='goalDetail'?renderGoalDetail():state.view==='commitmentDetail'?renderGoalsSubtabs()+renderCommitmentDetail():state.view==='commitmentsList'?renderGoalsSubtabs()+renderCommitmentsList():renderGoalsList()):state.tab==='planning'?renderPlanningTab():state.tab==='transactions'?renderTransactionsTab():state.tab==='accounts'?(state.view==='accountDetail'?renderAccountDetail(state.activeAccountId):renderAccountsTab()):renderBackupTab()) + renderMenu()+renderSearch()+renderUtility() + (state.tab==='transactions'&&!state.showTxForm&&!state.utility&&!state.showSearch?'<button class="fab" onclick="WBT.toggleTxForm(true)">+</button>':'') + (state.showTxForm?renderTxModal():'');
+    app.innerHTML=renderTopBanner()+renderBrandHeader()+renderProfileBar()+renderTabs()+ (state.tab==='analysis'?renderAnalysisTab():state.tab==='goals'?(state.view==='goalDetail'?renderGoalDetail():state.view==='commitmentDetail'?renderGoalsSubtabs()+renderCommitmentDetail():state.view==='commitmentsList'?renderGoalsSubtabs()+renderCommitmentsList():renderGoalsList()):state.tab==='planning'?renderPlanningTab():state.tab==='transactions'?renderTransactionsTab():state.tab==='accounts'?(state.view==='accountDetail'?renderAccountDetail(state.activeAccountId):renderAccountsTab()):renderBackupTab()) + renderMenu()+renderSearch()+renderUtility() + (!state.showTxForm&&!state.utility&&!state.showSearch?'<button class="fab" onclick="WBT.toggleTxForm(true)">+</button>':'') + (state.showTxForm?renderTxModal():'');
   }
   function renderTabs(){function btn(id,icon,label){return '<button class="tab-btn'+(state.tab===id?' active':'')+'" onclick="WBT.setTab('+JSON.stringify(id).replace(/"/g,"&quot;").replace(/&quot;/g,"'")+')"><span style="font-size:14px;">'+icon+'</span><span>'+label+'</span></button>';}; return '<div class="tabs">'+btn('transactions','🧾','Log')+'<button class="tab-btn'+(state.tab==='analysis'?' active':'')+'" onclick="WBT.openAnalysis()"><span style="font-size:14px;">📊</span><span>Analysis</span></button>'+btn('goals','▦','Goals')+btn('accounts','👥','Accounts')+'</div>'; }
 
@@ -1444,7 +1445,7 @@
         html += '<div class="goal-card" onclick="WBT.openGoal(\'' + g.id + '\')">' +
           '<div class="goal-top">' +
           '<div><div class="goal-name">' + esc(g.name) + '</div>' +
-          '<div class="goal-sub">' + fmt(s.filled) + ' of ' + fmt(s.target) + ' · ' + s.pct.toFixed(0) + '% funded · Pending ' + fmt(Math.max(0, s.target - s.filled)) + '</div></div>' +
+          '<div class="goal-sub">' + fmt(s.filled) + ' of ' + fmt(s.target) + ' · ' + s.pct.toFixed(0) + '% funded · ' + fmt(Math.max(0,s.target-s.filled)) + ' pending</div></div>' +
           '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">' + statusControls(g.id, normalizeGoalStatus(g.status), 'setGoalStatus') + fixedBudgetControl(g,s) + '</div>' +
           '</div>' +
           '<div class="bar-bg"><div class="bar-fill" style="width:' + Math.min(100, s.pct) + '%;background:' + barColor + ';"></div></div>' +
@@ -1956,14 +1957,15 @@
     setGoalsSubtab:function(v){state.goalsSubtab=v==='commitments'?'commitments':'financial';state.view=v==='commitments'?'commitmentsList':'goalsList';state.activeGoalId=null;state.activeCommitmentId=null;state.commitmentFormVisible=false;render();},
     openCommitment:function(id){state.activeCommitmentId=id;state.view='commitmentDetail';state.commitmentFormVisible=false;render();},
     backToCommitments:function(){state.view='commitmentsList';state.activeCommitmentId=null;render();},
-    toggleCommitmentForm:function(v){state.commitmentFormVisible=!!v;state.editingCommitmentId=null;render();},
-    cancelCommitmentForm:function(){state.commitmentFormVisible=false;state.editingCommitmentId=null;render();},
-    toggleExternalPaymentForm:function(v){state.externalPaymentFormVisible=!!v;render();},
-    addExternalPayment:function(commitmentId){var c=commitmentById(commitmentId);if(!c)return;var amount=Number(document.getElementById('externalPaymentAmount').value)||0,date=(document.getElementById('externalPaymentDate').value||todayStr()),payer=(document.getElementById('externalPaymentPayer').value||'External').trim()||'External',note=(document.getElementById('externalPaymentNote').value||'').trim();if(amount<=0){alert('Enter a valid external payment amount.');return;}if(!c.externalPayments)c.externalPayments=[];c.externalPayments.push({id:uid('external-payment'),amount:amount,date:date,payer:payer,note:note});state.externalPaymentFormVisible=false;save();render();},
-    removeExternalPayment:function(commitmentId,paymentId){var c=commitmentById(commitmentId);if(!c||!Array.isArray(c.externalPayments))return;var x=c.externalPayments.filter(function(p){return p.id===paymentId;})[0];if(!x)return;if(!confirm('Remove this external payment of '+fmt(x.amount)+'?'))return;c.externalPayments=c.externalPayments.filter(function(p){return p.id!==paymentId;});save();render();},
-    editCommitment:function(id){state.goalsSubtab='commitments';state.editingCommitmentId=id;state.commitmentFormVisible=true;state.view='commitmentsList';render();},
-    saveCommitment:function(){var name=(document.getElementById('commitmentName').value||'').trim(),total=Number(document.getElementById('commitmentTotal').value)||0,paid=Number(document.getElementById('commitmentPaid').value)||0,monthly=Number(document.getElementById('commitmentMonthly').value)||0,icon=(document.getElementById('commitmentIcon').value||'📌').trim()||'📌',notes=(document.getElementById('commitmentNotes').value||'').trim();if(!name){alert('Enter a commitment name.');return;}if(total<=0){alert('Enter a valid total amount.');return;}if(paid<0||paid>total){alert('Already Paid must be between 0 and the Total Amount.');return;}if(state.editingCommitmentId){state.commitments=state.commitments.map(function(c){return c.id===state.editingCommitmentId?Object.assign({},c,{name:name,totalAmount:total,alreadyPaid:paid,expectedMonthly:monthly,icon:icon,notes:notes}):c;});}else{state.commitments.push({id:uid('commitment'),name:name,icon:icon,totalAmount:total,alreadyPaid:paid,expectedMonthly:monthly,startDate:todayStr(),status:'active',notes:notes});}state.commitmentFormVisible=false;state.editingCommitmentId=null;save();render();},
-    removeCommitment:function(id){var c=commitmentById(id);if(!c)return;var linked=commitmentPayments(c).length;if(!confirm('Remove this commitment? '+(linked?'Linked payment transactions will remain in Log, but will no longer be linked to this commitment.':'') ))return;state.transactions.forEach(function(t){if(t.commitmentId===id)delete t.commitmentId;});state.commitments=state.commitments.filter(function(x){return x.id!==id;});save();render();},
+    toggleCommitmentForm:function(v){state.commitmentFormVisible=!!v;state.editingCommitmentId=null;state.editingExternalPaymentId=null;render();},
+    cancelCommitmentForm:function(){state.commitmentFormVisible=false;state.editingCommitmentId=null;state.editingExternalPaymentId=null;render();},
+    editCommitment:function(id){state.goalsSubtab='commitments';state.editingCommitmentId=id;state.editingExternalPaymentId=null;state.commitmentFormVisible=true;state.view='commitmentsList';render();},
+    startExternalPayment:function(commitmentId,editId){var c=commitmentById(commitmentId);if(!c)return;c.externalPayments=Array.isArray(c.externalPayments)?c.externalPayments:[];state.activeCommitmentId=commitmentId;state.view='commitmentDetail';state.editingExternalPaymentId=(typeof editId==='undefined')?'__new__':editId;render();},
+    cancelExternalPayment:function(){state.editingExternalPaymentId=null;render();},
+    saveExternalPayment:function(commitmentId,editId){var c=commitmentById(commitmentId);if(!c)return;var amount=Number(document.getElementById('externalAmount').value)||0,date=document.getElementById('externalDate').value||todayStr(),paidBy=(document.getElementById('externalPaidBy').value||'').trim(),note=(document.getElementById('externalNote').value||'').trim(),description=(document.getElementById('externalDescription').value||'').trim();if(amount<=0){alert('Enter a valid external payment amount.');return;}if(!paidBy){alert('Enter who paid the amount.');return;}var oldAmount=editId?Number(((c.externalPayments||[]).filter(function(x){return x.id===editId;})[0]||{}).amount)||0:0;var remaining=Math.max(0,(Number(c.totalAmount)||0)-commitmentStats(c).paid+oldAmount);if(amount>remaining){alert('External payment cannot be greater than the commitment pending amount.');return;}c.externalPayments=Array.isArray(c.externalPayments)?c.externalPayments:[];if(editId){c.externalPayments=c.externalPayments.map(function(x){return x.id===editId?Object.assign({},x,{amount:amount,date:date,paidBy:paidBy,note:note,description:description}):x;});}else{c.externalPayments.push({id:uid('extpay'),amount:amount,date:date,time:'',paidBy:paidBy,note:note,description:description});}state.editingExternalPaymentId=null;save();render();},
+    removeExternalPayment:function(commitmentId,paymentId){var c=commitmentById(commitmentId);if(!c)return;if(!confirm('Remove this external payment? It will reduce the amount paid toward this commitment.'))return;c.externalPayments=(c.externalPayments||[]).filter(function(x){return x.id!==paymentId;});save();render();},
+    saveCommitment:function(){var name=(document.getElementById('commitmentName').value||'').trim(),total=Number(document.getElementById('commitmentTotal').value)||0,paid=Number(document.getElementById('commitmentPaid').value)||0,monthly=Number(document.getElementById('commitmentMonthly').value)||0,icon=(document.getElementById('commitmentIcon').value||'📌').trim()||'📌',notes=(document.getElementById('commitmentNotes').value||'').trim();if(!name){alert('Enter a commitment name.');return;}if(total<=0){alert('Enter a valid total amount.');return;}if(paid<0||paid>total){alert('Starting Paid Amount must be between 0 and the Total Amount.');return;}if(state.editingCommitmentId){state.commitments=state.commitments.map(function(c){return c.id===state.editingCommitmentId?Object.assign({},c,{name:name,totalAmount:total,alreadyPaid:paid,expectedMonthly:monthly,icon:icon,notes:notes}):c;});}else{state.commitments.push({id:uid('commitment'),name:name,icon:icon,totalAmount:total,alreadyPaid:paid,expectedMonthly:monthly,startDate:todayStr(),status:'active',notes:notes,externalPayments:[]});}state.commitmentFormVisible=false;state.editingCommitmentId=null;save();render();},
+    removeCommitment:function(id){var c=commitmentById(id);if(!c)return;var linked=commitmentPayments(c).length,external=commitmentExternalPayments(c).length;if(!confirm('Remove this commitment? '+(linked?'Linked payment transactions will remain in Log, but will no longer be linked to this commitment. ':'')+(external?'External payment records will also be removed.':'')))return;state.transactions.forEach(function(t){if(t.commitmentId===id)delete t.commitmentId;});state.commitments=state.commitments.filter(function(x){return x.id!==id;});save();render();},
     setCommitmentStatus:function(id,status){var c=commitmentById(id);if(!c)return;c.status=['active','paused','completed'].indexOf(status)>=0?status:'active';save();render();},
     openGoal: function (id) { state.activeGoalId = id; state.view = 'goalDetail'; state.editingCatId = null; state.editingTransactionCategoryId = null; state.showAddCat = false; state.activeCommitmentId = null; render(); },
     backToGoals: function () { state.view = 'goalsList'; state.activeGoalId = null; render(); },
@@ -1992,14 +1994,14 @@
     },
     fixGoalBudget: function(id) {
       var g=findGoal(id); if(!g) return;
-      var amount=Math.max(0,Number(g.completionFunded)||0);
-      if(!amount){ var summary=goalSummaries().filter(function(x){return x.goal.id===id;})[0]; amount=summary?Math.max(0,summary.current):0; }
-      if(!amount){ alert('There is no funded amount to fix yet.'); return; }
-      g.lockedBudget=amount; delete g.lockedBudget; delete g.fixedBudget; save(); render();
+      var summary=goalSummaries().filter(function(x){return x.goal.id===id;})[0];
+      var amount=summary?Math.max(0,summary.current):0;
+      if(!amount){ alert('There is no current savings to lock for this goal yet.'); return; }
+      g.lockedBudget=amount; delete g.fixedBudget; save(); render();
     },
     unfixGoalBudget: function(id) {
       var g=findGoal(id); if(!g) return;
-      if(!confirm('Unlock this savings reservation? The amount will become available to other goals again.')) return;
+      if(!confirm('Unlock this savings reservation? The reserved amount will become available to other goals again.')) return;
       delete g.lockedBudget; delete g.fixedBudget; save(); render();
     },
     fixCategoryBudget: function(goalId, catId) {
@@ -2009,7 +2011,7 @@
       var summary=goalSummaries().filter(function(x){return x.goal.id===goalId;})[0];
       var item=summary && summary.items.filter(function(x){return x.id===catId;})[0];
       var amount=item?Math.max(0,item.current):0;
-      if(!amount){ alert('There is no funded amount to fix yet.'); return; }
+      if(!amount){ alert('There is no current savings to lock for this budget item yet.'); return; }
       c.lockedBudget=amount; delete c.fixedBudget;
       save(); render();
     },
@@ -2423,6 +2425,7 @@
     wrapOpen('toggleTxForm','txForm');
     wrapOpen('openGoal','goal');
     wrapOpen('openCommitment','commitment');
+    wrapOpen('startExternalPayment','commitment',false);
     wrapOpen('openAccountDetail','account');
     wrapOpen('openAnalysisCategory','analysisCategory');
     wrapOpen('openCategoryMergeOverlay','categoryMerge');
@@ -2638,6 +2641,86 @@
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',addLink);
   else addLink();
 })();
+</script>
+
+<script>
+(function () {
+  'use strict';
+  if (typeof window.WBT === 'undefined') return;
+  var WBT = window.WBT;
+  var navStack = [];
+  var poppingFromHistory = false;
+
+  function pushNav(entry) {
+    if (poppingFromHistory) return;
+    history.pushState({ dmoneyNav: true }, '', location.href);
+    navStack.push(entry);
+  }
+
+  function wrapToggle(name, isOpenFn) {
+    var orig = WBT[name];
+    if (typeof orig !== 'function') return;
+    WBT[name] = function (v) {
+      if (v) {
+        orig.apply(WBT, arguments);
+        pushNav({ fn: orig, arg: false, isOpen: isOpenFn });
+      } else {
+        if (navStack.length > 0 && !poppingFromHistory) {
+          history.back();
+        } else {
+          orig.apply(WBT, arguments);
+        }
+      }
+    };
+  }
+
+  function wrapPair(openName, closeName, isOpenFn) {
+    var origOpen = WBT[openName];
+    var origClose = WBT[closeName];
+    if (typeof origOpen !== 'function' || typeof origClose !== 'function') return;
+    WBT[openName] = function () {
+      var r = origOpen.apply(WBT, arguments);
+      pushNav({ fn: origClose, arg: undefined, isOpen: isOpenFn });
+      return r;
+    };
+    WBT[closeName] = function () {
+      if (navStack.length > 0 && !poppingFromHistory) {
+        history.back();
+      } else {
+        origClose.apply(WBT, arguments);
+      }
+    };
+  }
+
+  window.addEventListener('popstate', function () {
+    while (navStack.length > 0) {
+      var top = navStack.pop();
+      if (top.isOpen && !top.isOpen()) continue; // already closed some other way (e.g. Save) — skip silently
+      poppingFromHistory = true;
+      try { top.fn(top.arg); } finally { poppingFromHistory = false; }
+      return;
+    }
+    // nothing of ours was open — let the back gesture behave normally (exit/minimize)
+  });
+
+  wrapToggle('toggleTxForm', function () { return !!document.querySelector('.tx-modal'); });
+  wrapToggle('toggleMenu', function () { return !!document.querySelector('.side-menu'); });
+  wrapToggle('toggleSearch', function () { return !!document.getElementById('dmoneySearchInput'); });
+  wrapPair('openGoal', 'backToGoals', function () { return !!document.querySelector('.back-btn'); });
+  wrapPair('openUtility', 'closeUtility', function () { return !!document.querySelector('.utility-panel, .notification-panel'); });
+  wrapPair('startTransactionCategoryEdit', 'cancelTransactionCategoryEdit', function () { return !!document.getElementById('dmoneyEditOverlay'); });
+  wrapPair('startAccountTypeEdit', 'cancelAccountTypeEdit', function () { return !!document.getElementById('dmoneyEditOverlay'); });
+})();
+</script>
+
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('sw.js').catch(function (err) {
+      console.log('Service worker registration failed (offline install may not work):', err);
+    });
+  });
+}
 </script>
 
 </body>
