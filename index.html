@@ -1083,6 +1083,17 @@
   function renderDangerZoneSettings(){
     return '<div class="setting-card" style="border-color:rgba(196,82,108,.45);"><div class="backup-section-title" style="margin-top:0;color:var(--rose);">Danger Zone</div><div style="font-size:11px;color:var(--muted);line-height:1.55;margin-bottom:10px;">Reset the transaction history across <b>all your accounts</b>. Your accounts, opening balances, goals and settings will stay. Account balances will return to their opening balances because the transaction history is removed.</div><button class="btn" style="width:100%;justify-content:center;border:1px solid rgba(196,82,108,.6);background:rgba(196,82,108,.10);color:var(--rose);" onclick="WBT.resetAllTransactions()">🗑 Reset All Transactions &amp; Account Balances</button><button class="btn" style="width:100%;justify-content:center;margin-top:8px;border:1px solid rgba(196,82,108,.9);background:rgba(196,82,108,.18);color:var(--rose);font-weight:800;" onclick="WBT.resetEverything()">⚠️ Reset Everything — Start Fresh</button></div>';
   }
+  function refreshSettingsPanelPreserveScroll(){
+    var app=document.getElementById('app'),panel=app&&app.querySelector('.utility-panel');
+    if(!panel || state.utility!=='settings') { render(); return; }
+    var scrollTop=panel.scrollTop;
+    panel.innerHTML='<div class="utility-head"><div class="utility-title">Settings</div><button class="header-icon" onclick="WBT.closeUtility()">×</button></div>'+renderSettings();
+    requestAnimationFrame(function(){
+      panel.scrollTop=scrollTop;
+      requestAnimationFrame(function(){ panel.scrollTop=scrollTop; });
+    });
+  }
+
   function renderSettings(){
     var sec=state.settingsSection||'';
     if(!sec){
@@ -2364,7 +2375,25 @@
 
     // transactions
     toggleTxForm:function(v,defaultType){state.showTxForm=v;state.editingTxId=null;state.calcExpr='';state.txDraftCategory='';state.txDraftNote='';state.txDraftDescription='';state.txDraftAccount='';state.txDraftCategoryValue='';state.txDraftCommitment='';state.txDraftFromAccount='';state.txDraftToAccount='';state.txDraftDate='';state.txDraftTime='';state.txCategoryManuallyChanged=false;if(v)state.txType=defaultType||'expense';render();},
-    setTxType:function(t){state.txType=t;state.calcExpr='';render();}, setTxView:function(v){state.txView=v;render();}, setAcctFilter:function(v){state.acctFilter=v;state.acctFilters=(v==='all'?['all']:[v]);render();}, toggleAccountPicker:function(){state.showAccountPicker=!state.showAccountPicker;state.showCarryYearPicker=false;render();}, setCarryAccount:function(id,checked){var ids=(state.acctFilters&&state.acctFilters.length)?state.acctFilters.slice():['all'];if(id==='all'){state.acctFilters=checked?['all']:[];}else{ids=ids.filter(function(x){return x!=='all';});if(checked&&ids.indexOf(id)<0)ids.push(id);if(!checked)ids=ids.filter(function(x){return x!==id;});state.acctFilters=ids.length?ids:[];}if(!state.acctFilters.length)state.acctFilters=['all'];state.acctFilter=(state.acctFilters.indexOf('all')>=0?'all':(state.acctFilters.length===1?state.acctFilters[0]:'multi'));state.showAccountPicker=true;render();},
+    setTxType:function(t){
+      // Preserve everything the user has already typed when switching Income / Expense / Transfer.
+      // In particular, changing the transaction type must never clear the amount, note, or description.
+      captureTxDraft();
+      var currentAmount=state.calcExpr;
+      var previousType=state.txType;
+      state.txType=t;
+      state.calcExpr=currentAmount;
+      // Category selections belong to their transaction type. Clear an incompatible old
+      // category, then let the normal note/category memory suggest the correct one.
+      if(t==='transfer'){
+        state.txDraftCategoryValue='';
+        state.txDraftCommitment='';
+      } else if(previousType!==t){
+        state.txDraftCategoryValue='';
+        if(t!=='expense') state.txDraftCommitment='';
+      }
+      render();
+    }, setTxView:function(v){state.txView=v;render();}, setAcctFilter:function(v){state.acctFilter=v;state.acctFilters=(v==='all'?['all']:[v]);render();}, toggleAccountPicker:function(){state.showAccountPicker=!state.showAccountPicker;state.showCarryYearPicker=false;render();}, setCarryAccount:function(id,checked){var ids=(state.acctFilters&&state.acctFilters.length)?state.acctFilters.slice():['all'];if(id==='all'){state.acctFilters=checked?['all']:[];}else{ids=ids.filter(function(x){return x!=='all';});if(checked&&ids.indexOf(id)<0)ids.push(id);if(!checked)ids=ids.filter(function(x){return x!==id;});state.acctFilters=ids.length?ids:[];}if(!state.acctFilters.length)state.acctFilters=['all'];state.acctFilter=(state.acctFilters.indexOf('all')>=0?'all':(state.acctFilters.length===1?state.acctFilters[0]:'multi'));state.showAccountPicker=true;render();},
     setPeriod:function(p){state.period=p;if(p==='day')state.periodValue=todayStr();if(p==='month')state.periodValue=monthOf(todayStr());if(p==='year')state.periodValue=yearOf(todayStr());render();}, setPeriodValue:function(v){state.periodValue=v;render();},
     setAnalysisRange:function(v){state.analysisRange=['daily','weekly','monthly','3m','6m','yearly'].indexOf(v)>=0?v:'yearly';state.analysisCategoryDetail=null;render();}, setAnalysisYear:function(v){state.analysisYear=String(v);render();}, setAnalysisMonth:function(v){if(/^\d{4}-\d{2}$/.test(v))state.analysisMonth=v;render();}, setAnalysisDate:function(v){if(/^\d{4}-\d{2}-\d{2}$/.test(v))state.analysisDate=v;render();}, openAnalysisCategory:function(name,type){state.analysisCategoryDetail={name:String(name||''),type:type==='income'?'income':'expense'};render();}, closeAnalysisCategoryDetail:function(){state.analysisCategoryDetail=null;render();}, setAnalysisType:function(v){state.analysisType=v==='income'?'income':'expense';state.analysisView=v==='income'?'incomeOverview':'expenseOverview';render();}, setAnalysisView:function(v){state.analysisView=v;state.showAnalysisPicker=false;render();}, toggleAnalysisPicker:function(){state.showAnalysisPicker=!state.showAnalysisPicker;render();}, setAnalysisAccounts:function(ids){state.analysisAccountIds=Array.isArray(ids)&&ids.length?ids:['all'];state.showAnalysisAccounts=false;render();}, toggleAnalysisAccounts:function(){state.showAnalysisAccounts=!state.showAnalysisAccounts;render();}, toggleAnalysisAccount:function(id){var ids=(state.analysisAccountIds||['all']).filter(function(x){return x!=='all';});var i=ids.indexOf(id);if(i>=0)ids.splice(i,1);else ids.push(id);state.analysisAccountIds=ids.length?ids:['all'];render();},
     setMonthlyRange:function(){state.monthlyRange='yearly';render();}, toggleCarryYearPicker:function(){state.showCarryYearPicker=!state.showCarryYearPicker;state.showAccountPicker=false;render();}, setCarryYearSelection:function(v,checked){var ys=(state.carryYears&&state.carryYears.length)?state.carryYears.slice():[yearOf(todayStr())];if(v==='all'){state.carryYears=checked?['all']:[yearOf(todayStr())];state.showCarryYearPicker=true;render();return;}ys=ys.filter(function(x){return x!=='all';});var sv=String(v);if(checked){if(ys.indexOf(sv)<0)ys.push(sv);}else{ys=ys.filter(function(x){return x!==sv;});}if(!ys.length)ys=[sv];state.carryYears=ys.sort();state.showCarryYearPicker=true;render();}, setCarryYear:function(v){state.carryYears=[v];state.carryYear=v;render();}, setMonthlySort:function(v){state.monthlySort=v==='desc'?'desc':'asc';render();}, setMonthlyHideEmpty:function(v){state.monthlyHideEmpty=!!v;render();},
@@ -2415,7 +2444,7 @@
       state.categoryOverrides[base]=Object.assign({},state.categoryOverrides[base]||{}, {removed:true});
       if(base!==name) delete state.categoryOverrides[name];
       if(state.editingTransactionCategoryId===base || state.editingTransactionCategoryId===name) state.editingTransactionCategoryId=null;
-      var y=window.scrollY||window.pageYOffset||0;save();render();requestAnimationFrame(function(){window.scrollTo(0,y);});
+      save();refreshSettingsPanelPreserveScroll();
     },
     startTransactionCategoryEdit:function(name){state.editingTransactionCategoryId=String(name||'');closeEditOverlay();openCategoryEditOverlay(name);},
     cancelTransactionCategoryEdit:function(){state.editingTransactionCategoryId=null;closeEditOverlay();},
@@ -2437,15 +2466,15 @@
       if(oldDisplay!==old) delete state.categoryOverrides[oldDisplay];
       state.categoryOverrides[baseKey]=Object.assign({},prior,{name:name,type:type,icon:icon||prior.icon||categoryIcon(old,type),removed:false});
       if(!wasCustom && STANDARD_CATEGORIES.indexOf(old)<0 && state.transactionCategories.indexOf(name)<0) state.transactionCategories.push(name);
-      state.editingTransactionCategoryId=null;var y=window.scrollY||window.pageYOffset||0;save();closeEditOverlay();render();requestAnimationFrame(function(){window.scrollTo(0,y);});
+      state.editingTransactionCategoryId=null;save();closeEditOverlay();refreshSettingsPanelPreserveScroll();
     },
-    addTransactionCategoryFromSettings:function(){var el=document.getElementById('settingsCatName'),name=el&&el.value.trim(),type=(document.getElementById('settingsCatType')||{}).value||'expense';if(!name)return;if(STANDARD_CATEGORIES.indexOf(name)<0&&state.transactionCategories.indexOf(name)<0){state.transactionCategories.push(name);state.categoryOverrides[name]={name:name,type:type,icon:type==='income'?'💰':'📌',removed:false};save();}render();},
+    addTransactionCategoryFromSettings:function(){var el=document.getElementById('settingsCatName'),name=el&&el.value.trim(),type=(document.getElementById('settingsCatType')||{}).value||'expense';if(!name)return;if(STANDARD_CATEGORIES.indexOf(name)<0&&state.transactionCategories.indexOf(name)<0){state.transactionCategories.push(name);state.categoryOverrides[name]={name:name,type:type,icon:type==='income'?'💰':'📌',removed:false};save();}refreshSettingsPanelPreserveScroll();},
     setAccountTypeIcon:function(icon){var el=document.getElementById('editAcctTypeIcon');if(el)el.value=icon;},
     startAccountTypeEdit:function(id){state.editingAccountTypeId=id;closeEditOverlay();openAccountTypeEditOverlay(id);},
     cancelAccountTypeEdit:function(){state.editingAccountTypeId=null;closeEditOverlay();},
-    saveAccountTypeEdit:function(id){var y=window.scrollY||window.pageYOffset||0;var name=(document.getElementById('editAcctTypeName').value||'').trim(),icon=(document.getElementById('editAcctTypeIcon').value||'').trim();if(!name)return;state.accountTypeOverrides[id]=Object.assign({},state.accountTypeOverrides[id]||{},{label:name,icon:icon||accountTypeInfo(id).icon,removed:false});state.editingAccountTypeId=null;save();closeEditOverlay();render();requestAnimationFrame(function(){window.scrollTo(0,y);});},
-    removeAccountType:function(id){var y=window.scrollY||window.pageYOffset||0;var used=state.accounts.some(function(a){return a.type===id;});if(used&&!confirm('This account type is currently used by an account. Remove the type from new account choices anyway? Existing accounts will keep their icon.'))return;state.accountTypeOverrides[id]=Object.assign({},state.accountTypeOverrides[id]||{},{removed:true});save();render();requestAnimationFrame(function(){window.scrollTo(0,y);});},
-    restoreAllAccountTypes:function(){var y=window.scrollY||window.pageYOffset||0;state.accountTypeOverrides={};save();render();requestAnimationFrame(function(){window.scrollTo(0,y);});},
+    saveAccountTypeEdit:function(id){var nameEl=document.getElementById('editAcctTypeName'),iconEl=document.getElementById('editAcctTypeIcon');var name=(nameEl&&nameEl.value||'').trim(),icon=(iconEl&&iconEl.value||'').trim();if(!name)return;state.accountTypeOverrides[id]=Object.assign({},state.accountTypeOverrides[id]||{},{label:name,icon:icon||accountTypeInfo(id).icon,removed:false});state.editingAccountTypeId=null;save();closeEditOverlay();refreshSettingsPanelPreserveScroll();},
+    removeAccountType:function(id){var used=state.accounts.some(function(a){return a.type===id;});if(used&&!confirm('This account type is currently used by an account. Remove the type from new account choices anyway? Existing accounts will keep their icon.'))return;state.accountTypeOverrides[id]=Object.assign({},state.accountTypeOverrides[id]||{},{removed:true});save();refreshSettingsPanelPreserveScroll();},
+    restoreAllAccountTypes:function(){state.accountTypeOverrides={};save();refreshSettingsPanelPreserveScroll();},
     setAcctIcon:function(icon){var el=document.getElementById('acctCustomIcon');if(el)el.value=icon;},
     setAcctIconFromInput:function(){var el=document.getElementById('acctCustomIcon');if(el)el.value=el.value.trim();},
     toggleMenu:function(v){
