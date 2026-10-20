@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>DMoney 2.2</title>
+<title>DMoney 2.2 — Test Candidate</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#170D10">
 <meta name="mobile-web-app-capable" content="yes">
@@ -326,6 +326,10 @@
   .log-account-toggle{min-height:40px;border-radius:11px;}
   .carry-options>select{width:100%;min-width:0;height:40px;padding:10px 34px 10px 12px;border:1px solid var(--card-border);border-radius:11px;background-color:var(--card);color:var(--text);font:600 12px inherit;}
 
+  .period-nav{display:flex;align-items:center;gap:8px;width:100%;}
+  .period-nav input{flex:1;min-width:0;margin:0;text-align:center;}
+  .period-nav-arrow{flex:0 0 42px;height:42px;border:1px solid var(--card-border);border-radius:12px;background:var(--card);color:var(--text);font-size:28px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;}
+  .period-nav-arrow:active{transform:scale(.97);background:var(--gold);color:#241318;}
 </style>
 
 <style>
@@ -767,12 +771,60 @@
     // brand new install - use the default profile already set on state
     loadProfileIntoState(state.activeProfileId);
   }
+  var dmoneyAutoBackupHandle = null;
+  var dmoneyAutoBackupReady = false;
+  var dmoneyAutoBackupStatus = 'Not configured';
+  var dmoneyAutoBackupTimer = null;
+  var dmoneyAutoBackupDB = null;
+  function dmoneyOpenBackupDB() {
+    return new Promise(function(resolve,reject){
+      if(!window.indexedDB){reject(new Error('IndexedDB unavailable'));return;}
+      if(dmoneyAutoBackupDB){resolve(dmoneyAutoBackupDB);return;}
+      var req=indexedDB.open('dmoney-file-backup-settings',1);
+      req.onupgradeneeded=function(){if(!req.result.objectStoreNames.contains('settings'))req.result.createObjectStore('settings');};
+      req.onsuccess=function(){dmoneyAutoBackupDB=req.result;resolve(req.result);};
+      req.onerror=function(){reject(req.error||new Error('Could not open backup settings'));};
+    });
+  }
+  function dmoneyStoreBackupHandle(handle) {
+    return dmoneyOpenBackupDB().then(function(db){return new Promise(function(resolve,reject){var tx=db.transaction('settings','readwrite');tx.objectStore('settings').put(handle,'fileHandle');tx.oncomplete=resolve;tx.onerror=function(){reject(tx.error);};});});
+  }
+  function dmoneyLoadBackupHandle() {
+    return dmoneyOpenBackupDB().then(function(db){return new Promise(function(resolve,reject){var tx=db.transaction('settings','readonly'),req=tx.objectStore('settings').get('fileHandle');req.onsuccess=function(){resolve(req.result||null);};req.onerror=function(){reject(req.error);};});});
+  }
+  function dmoneyBackupPayload() {
+    syncActiveProfileFromState();
+    return JSON.stringify({app:'DMoney',version:'2.2',profiles:state.profiles,activeProfileId:state.activeProfileId,exportedAt:new Date().toISOString(),backupType:'automatic-file-backup'},null,2);
+  }
+  function dmoneyWriteAutoBackup() {
+    if(!dmoneyAutoBackupHandle || !dmoneyAutoBackupReady) return Promise.resolve(false);
+    return Promise.resolve(dmoneyAutoBackupHandle.queryPermission ? dmoneyAutoBackupHandle.queryPermission({mode:'readwrite'}) : 'granted').then(function(permission){
+      if(permission!=='granted') { dmoneyAutoBackupStatus='Permission needed — open Backup and re-enable'; return false; }
+      return dmoneyAutoBackupHandle.createWritable().then(function(writable){return writable.write(dmoneyBackupPayload()).then(function(){return writable.close();});}).then(function(){dmoneyAutoBackupStatus='Updated '+new Date().toLocaleString();return true;});
+    }).catch(function(err){dmoneyAutoBackupStatus='Backup failed: '+(err&&err.message?err.message:'unknown error');console.warn('DMoney automatic file backup failed',err);return false;});
+  }
+  function scheduleAutoFileBackup() {
+    if(!dmoneyAutoBackupReady || !dmoneyAutoBackupHandle) return;
+    if(dmoneyAutoBackupTimer) clearTimeout(dmoneyAutoBackupTimer);
+    dmoneyAutoBackupTimer=setTimeout(function(){dmoneyWriteAutoBackup().then(function(){if(state.tab==='backup')render();});},900);
+  }
+  function initAutoFileBackup() {
+    dmoneyLoadBackupHandle().then(function(handle){
+      if(!handle)return;
+      dmoneyAutoBackupHandle=handle;
+      return (handle.queryPermission?handle.queryPermission({mode:'readwrite'}):Promise.resolve('prompt')).then(function(permission){
+        if(permission==='granted'){dmoneyAutoBackupReady=true;dmoneyAutoBackupStatus='Connected — writing current backup';return dmoneyWriteAutoBackup().then(function(){if(state.tab==='backup')render();});}
+        else {dmoneyAutoBackupReady=false;dmoneyAutoBackupStatus='Backup file remembered; permission required';if(state.tab==='backup')render();}
+      });
+    }).catch(function(){dmoneyAutoBackupStatus='Not configured';});
+  }
   function save() {
     try {
       syncActiveProfileFromState();
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
         profiles: state.profiles, activeProfileId: state.activeProfileId
       }));
+      scheduleAutoFileBackup();
     } catch (e) { console.error('save failed', e); }
   }
 
@@ -1867,7 +1919,7 @@
     if(state.txView==='list') html+=renderLogAccountPicker();
     if(state.txView==='list'){
       html+='<div class="row-gap" style="margin-bottom:10px;">';['all','day','month','year'].forEach(function(p){var label=p==='all'?'All time':p.charAt(0).toUpperCase()+p.slice(1);html+='<button class="btn" style="flex:1;justify-content:center;font-size:12px;padding:7px 4px;border:1px solid var(--card-border);background:'+(state.period===p?'var(--rose)':'var(--card)')+';color:'+(state.period===p?'#2A0F16':'#D9BBA6')+';" onclick="WBT.setPeriod(\''+p+'\')">'+label+'</button>';});html+='</div>';
-      if(state.period==='day')html+='<div style="margin-bottom:10px;"><input type="date" value="'+state.periodValue+'" onchange="WBT.setPeriodValue(this.value)"></div>';if(state.period==='month')html+='<div style="margin-bottom:10px;"><input type="month" value="'+state.periodValue+'" onchange="WBT.setPeriodValue(this.value)"></div>';if(state.period==='year')html+='<div style="margin-bottom:10px;"><input type="number" value="'+state.periodValue+'" onchange="WBT.setPeriodValue(this.value)"></div>';
+      if(state.period==='day')html+='<div class="period-nav" style="margin-bottom:10px;"><button type="button" class="period-nav-arrow" aria-label="Previous day" onclick="WBT.shiftPeriod(-1)">‹</button><input aria-label="Selected day" type="date" value="'+state.periodValue+'" onchange="WBT.setPeriodValue(this.value)"><button type="button" class="period-nav-arrow" aria-label="Next day" onclick="WBT.shiftPeriod(1)">›</button></div>';if(state.period==='month')html+='<div class="period-nav" style="margin-bottom:10px;"><button type="button" class="period-nav-arrow" aria-label="Previous month" onclick="WBT.shiftPeriod(-1)">‹</button><input aria-label="Selected month" type="month" value="'+state.periodValue+'" onchange="WBT.setPeriodValue(this.value)"><button type="button" class="period-nav-arrow" aria-label="Next month" onclick="WBT.shiftPeriod(1)">›</button></div>';if(state.period==='year')html+='<div class="period-nav" style="margin-bottom:10px;"><button type="button" class="period-nav-arrow" aria-label="Previous year" onclick="WBT.shiftPeriod(-1)">‹</button><input aria-label="Selected year" type="number" min="1900" max="2200" value="'+state.periodValue+'" onchange="WBT.setPeriodValue(this.value)"><button type="button" class="period-nav-arrow" aria-label="Next year" onclick="WBT.shiftPeriod(1)">›</button></div>';
       var ftx=filteredTx(),inc=ftx.filter(function(t){return t.type==='income';}).reduce(function(a,t){return a+t.amount;},0),exp=ftx.filter(function(t){return t.type==='expense';}).reduce(function(a,t){return a+t.amount;},0),carry=periodCarryContext();html+=renderSafeSpend();html+='<div class="grid3" style="margin-bottom:14px;">'+sumCard('Income',fmt(inc),'var(--dmoney-income)',true,'C/F '+privacyDisplay('income',fmt(carry.opening)))+sumCard('Expense',fmt(exp),'var(--dmoney-expense)',true)+sumCard('Net',(inc-exp>=0?'+':'−')+' '+fmt(Math.abs(inc-exp)),'var(--gold)',true,'Closing '+privacyDisplay('net',fmt(carry.closing)))+'</div>';
       if(!ftx.length)html+='<div class="empty-note">No transactions in this range.</div>';else ftx.forEach(function(t){
         var isEasy=state.theme==='gray', isIconTheme=true;
@@ -2075,6 +2127,12 @@
       'Use <b>Download full backup</b> to save a copy, and <b>Restore</b> to load that copy on this or any other device/browser.</div>' +
       '</div>';
 
+    html += '<div class="setting-card" style="margin-bottom:16px;"><div class="backup-section-title" style="margin-top:0;">Automatic backup to a separate file (experimental)</div>'+
+      '<div style="font-size:12px;line-height:1.6;color:var(--muted);margin-bottom:10px;">Choose a JSON backup file in a location outside Chrome site storage. Where supported, DMoney will update that file after you make changes. Keep the file in a safe folder and do not delete it. This is a device-file backup, not Google Drive sync; browser support and file permission can vary, especially on mobile.</div>'+
+      '<div style="font-size:12px;line-height:1.5;margin-bottom:10px;"><b>Backup status:</b> '+esc(dmoneyAutoBackupStatus)+'</div>'+
+      '<button class="btn btn-gold backup-btn" onclick="WBT.configureAutoFileBackup()">📁 Choose / enable automatic backup file</button>'+
+      '<button class="btn btn-outline backup-btn" onclick="WBT.backupFileNow()">↻ Update backup file now</button>'+
+      '<div class="empty-note" style="text-align:left;padding:0;">Important: if Chrome clears site data, DMoney may lose the remembered file permission. The separate JSON file should remain in your chosen folder and can be restored below. If your browser does not support this feature, use Download full backup.</div></div>';
     html += '<div class="backup-section-title" style="margin-top:0;">Transfer between devices</div>';
     html += '<button class="btn btn-gold backup-btn" onclick="WBT.exportJSON()">⬇ Download full backup (.json)</button>';
     html += '<button class="btn btn-outline backup-btn" onclick="document.getElementById(\'importFileInput\').click()">⬆ Restore from backup (.json)</button>';
@@ -2395,6 +2453,9 @@
       render();
     }, setTxView:function(v){state.txView=v;render();}, setAcctFilter:function(v){state.acctFilter=v;state.acctFilters=(v==='all'?['all']:[v]);render();}, toggleAccountPicker:function(){state.showAccountPicker=!state.showAccountPicker;state.showCarryYearPicker=false;render();}, setCarryAccount:function(id,checked){var ids=(state.acctFilters&&state.acctFilters.length)?state.acctFilters.slice():['all'];if(id==='all'){state.acctFilters=checked?['all']:[];}else{ids=ids.filter(function(x){return x!=='all';});if(checked&&ids.indexOf(id)<0)ids.push(id);if(!checked)ids=ids.filter(function(x){return x!==id;});state.acctFilters=ids.length?ids:[];}if(!state.acctFilters.length)state.acctFilters=['all'];state.acctFilter=(state.acctFilters.indexOf('all')>=0?'all':(state.acctFilters.length===1?state.acctFilters[0]:'multi'));state.showAccountPicker=true;render();},
     setPeriod:function(p){state.period=p;if(p==='day')state.periodValue=todayStr();if(p==='month')state.periodValue=monthOf(todayStr());if(p==='year')state.periodValue=yearOf(todayStr());render();}, setPeriodValue:function(v){state.periodValue=v;render();},
+    shiftPeriod:function(delta){var d;if(state.period==='day'){var parts=String(state.periodValue||todayStr()).split('-').map(Number);d=new Date(parts[0],parts[1]-1,parts[2]);d.setDate(d.getDate()+delta);state.periodValue=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}else if(state.period==='month'){var p=String(state.periodValue||monthOf(todayStr())).split('-').map(Number);d=new Date(p[0],p[1]-1+delta,1);state.periodValue=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');}else if(state.period==='year'){var y=Number(state.periodValue)||Number(yearOf(todayStr()));state.periodValue=String(Math.max(1900,Math.min(2200,y+delta)));}render();},
+    configureAutoFileBackup:function(){if(!window.showSaveFilePicker){alert('This browser does not support choosing a file for automatic updates. You can still use Download full backup (.json). We can add a Google Drive connection after its required Google OAuth setup is configured.');return;}window.showSaveFilePicker({suggestedName:'dmoney-automatic-backup.json',types:[{description:'DMoney JSON backup',accept:{'application/json':['.json']}}]}).then(function(handle){dmoneyAutoBackupHandle=handle;return dmoneyStoreBackupHandle(handle);}).then(function(){return dmoneyAutoBackupHandle.requestPermission?dmoneyAutoBackupHandle.requestPermission({mode:'readwrite'}):'granted';}).then(function(permission){if(permission!=='granted'){dmoneyAutoBackupReady=false;dmoneyAutoBackupStatus='Permission not granted';alert('File permission was not granted. Please try again and allow file access.');}else{dmoneyAutoBackupReady=true;return dmoneyWriteAutoBackup().then(function(ok){alert(ok?'Automatic backup file configured and updated. It will update after saved changes while this app can access the file.':'Could not update the backup file. Check file permissions.');render();});}render();}).catch(function(err){if(err&&err.name==='AbortError')return;dmoneyAutoBackupStatus='Setup failed';alert('Could not configure automatic backup: '+(err&&err.message?err.message:'unknown error'));render();});},
+    backupFileNow:function(){if(!dmoneyAutoBackupHandle){alert('Choose an automatic backup file first.');return;}if(dmoneyAutoBackupHandle.requestPermission){dmoneyAutoBackupHandle.requestPermission({mode:'readwrite'}).then(function(permission){if(permission!=='granted'){dmoneyAutoBackupStatus='Permission required';render();return;}dmoneyAutoBackupReady=true;dmoneyWriteAutoBackup().then(function(ok){alert(ok?'Backup file updated successfully.':'Backup update failed.');render();});});}else{dmoneyAutoBackupReady=true;dmoneyWriteAutoBackup().then(function(ok){alert(ok?'Backup file updated successfully.':'Backup update failed.');render();});}},
     setAnalysisRange:function(v){state.analysisRange=['daily','weekly','monthly','3m','6m','yearly'].indexOf(v)>=0?v:'yearly';state.analysisCategoryDetail=null;render();}, setAnalysisYear:function(v){state.analysisYear=String(v);render();}, setAnalysisMonth:function(v){if(/^\d{4}-\d{2}$/.test(v))state.analysisMonth=v;render();}, setAnalysisDate:function(v){if(/^\d{4}-\d{2}-\d{2}$/.test(v))state.analysisDate=v;render();}, openAnalysisCategory:function(name,type){state.analysisCategoryDetail={name:String(name||''),type:type==='income'?'income':'expense'};render();}, closeAnalysisCategoryDetail:function(){state.analysisCategoryDetail=null;render();}, setAnalysisType:function(v){state.analysisType=v==='income'?'income':'expense';state.analysisView=v==='income'?'incomeOverview':'expenseOverview';render();}, setAnalysisView:function(v){state.analysisView=v;state.showAnalysisPicker=false;render();}, toggleAnalysisPicker:function(){state.showAnalysisPicker=!state.showAnalysisPicker;render();}, setAnalysisAccounts:function(ids){state.analysisAccountIds=Array.isArray(ids)&&ids.length?ids:['all'];state.showAnalysisAccounts=false;render();}, toggleAnalysisAccounts:function(){state.showAnalysisAccounts=!state.showAnalysisAccounts;render();}, toggleAnalysisAccount:function(id){var ids=(state.analysisAccountIds||['all']).filter(function(x){return x!=='all';});var i=ids.indexOf(id);if(i>=0)ids.splice(i,1);else ids.push(id);state.analysisAccountIds=ids.length?ids:['all'];render();},
     setMonthlyRange:function(){state.monthlyRange='yearly';render();}, toggleCarryYearPicker:function(){state.showCarryYearPicker=!state.showCarryYearPicker;state.showAccountPicker=false;render();}, setCarryYearSelection:function(v,checked){var ys=(state.carryYears&&state.carryYears.length)?state.carryYears.slice():[yearOf(todayStr())];if(v==='all'){state.carryYears=checked?['all']:[yearOf(todayStr())];state.showCarryYearPicker=true;render();return;}ys=ys.filter(function(x){return x!=='all';});var sv=String(v);if(checked){if(ys.indexOf(sv)<0)ys.push(sv);}else{ys=ys.filter(function(x){return x!==sv;});}if(!ys.length)ys=[sv];state.carryYears=ys.sort();state.showCarryYearPicker=true;render();}, setCarryYear:function(v){state.carryYears=[v];state.carryYear=v;render();}, setMonthlySort:function(v){state.monthlySort=v==='desc'?'desc':'asc';render();}, setMonthlyHideEmpty:function(v){state.monthlyHideEmpty=!!v;render();},
     startEditTransaction:function(id){var t=state.transactions.filter(function(x){return x.id===id;})[0];if(!t)return;state.editingTxId=id;state.txType=t.type;state.showTxForm=true;state.calcExpr=String(t.amount);state.txDraftNote=t.note||'';state.txDraftDescription=t.description||'';state.txDraftAccount=t.accountId||'';state.txDraftCategoryValue=t.category||'';state.txDraftCommitment=t.commitmentId||'';state.txDraftFromAccount=t.fromAccountId||'';state.txDraftToAccount=t.toAccountId||'';state.txCategoryManuallyChanged=true;state.txDraftDate=t.date||todayStr();state.txDraftTime=t.time||new Date().toTimeString().slice(0,5);render();},
@@ -2778,6 +2839,7 @@
   refreshNotifications();
   save();
   applyTheme();
+  initAutoFileBackup();
   render();
 })();
 </script>
