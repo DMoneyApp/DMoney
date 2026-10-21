@@ -2746,7 +2746,22 @@
         });
       });
       downloadFile('d-goal-planner-goals-budget-' + todayStr() + '.csv', toCSV(rows), 'text/csv');
+    },
+    getCloudBackupPayload: function () {
+      syncActiveProfileFromState();
+      return { app: 'DMoney', version: '2.2', backupType: 'google-drive', exportedAt: new Date().toISOString(), profiles: JSON.parse(JSON.stringify(state.profiles)), activeProfileId: state.activeProfileId };
+    },
+    restoreCloudBackup: function (backup) {
+      if (!backup || backup.app !== 'DMoney' || !Array.isArray(backup.profiles) || !backup.profiles.length) throw new Error('This is not a compatible DMoney backup.');
+      if (!confirm('Restore this backup? It will replace all profiles and financial records on this device.')) return false;
+      state.profiles = JSON.parse(JSON.stringify(backup.profiles));
+      var activeId = backup.activeProfileId && state.profiles.some(function (p) { return p.id === backup.activeProfileId; }) ? backup.activeProfileId : state.profiles[0].id;
+      loadProfileIntoState(activeId);
+      save();
+      render();
+      return true;
     }
+
   };
 
   /* Lightweight Android/Chrome back navigation. Does not alter rendering or normal app actions. */
